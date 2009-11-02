@@ -6,7 +6,7 @@ TODO:
       Handle sendmessage
       Handle findname
       Handle sendname
-      Handle sendnames (using json list [["name","ip:port"],["name2":"ip:port"]])
+      Handle sendnames (using json list [["name","ip:port"],["name2","ip2:port2"]])
 
   - Send message to another peer (using erlang http client BIF)
       sendmessage
