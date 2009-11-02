@@ -1,0 +1,17 @@
+TODO:
+  - GUI
+  - HTTP requests
+  - Request handling:
+      Send names using json [["name","ip:port"],["name2":"ip:port"]]
+
+Simple P2P chat
+  - Uses HTTP protocol
+  - GET methods
+      sendmessage (from another peer)
+        http://peer:port/chat/sendmessage?message=&myname=&myip=
+      findname
+        http://peer:port/chat/findname?name=&myname=&myip=&ttl=
+      asknames (sends names back via same socket)
+        http://peer:port/chat/asknames?ttl=
+      sendname (send my name to other peer OR peer from my json file)
+         http://peer:port/chat/sendname?name&ip=&ttl=
