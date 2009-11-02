@@ -1,12 +1,22 @@
 TODO:
   - GUI
-  - HTTP requests
-  - Request handling
-      Send names using json [["name","ip:port"],["name2":"ip:port"]]
+  - Check if name is available 
 
+  - Request handling
+      Handle sendmessage
+      Handle findname
+      Handle sendname
+      Handle sendnames (using json list [["name","ip:port"],["name2":"ip:port"]])
+
+  - Send message to another peer (using erlang http client BIF)
+      sendmessage
+      findname
+      sendname
+      sendnames
+  
 Simple P2P chat
   - Uses HTTP protocol
-  - GET methods
+  - Uses GET method
       sendmessage (from another peer)
         http://peer:port/chat/sendmessage?message=&myname=&myip=
       findname
