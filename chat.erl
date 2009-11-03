@@ -65,9 +65,6 @@ handler(Socket) ->
           
           % put message to nice data structure
           M = process_params(Params),
-          
-          % io:format("Name: ~p~nType: ~p~n",[M#message.name, M#message.type])
-          
           % proccess message
           process_message(M, Socket)
       end,
