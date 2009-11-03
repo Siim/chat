@@ -1,6 +1,7 @@
 TODO:
   - GUI
   - Check if name is available 
+  - Url functions: urlencode, urldecode
 
   - Request handling
       Handle sendmessage

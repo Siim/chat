@@ -4,7 +4,13 @@
 -export([process_params/1]).
 -export([parse_json_file/1]).
 -export([write_json_file/2]).
+-export([findname/1]).
 %-export([parse_json/1]).
+
+-define(not_implemented_501, "HTTP/1.1 501 Not Implemented\r\n\r\n").
+-define(forbidden_403, "HTTP/1.1 403 Forbidden\r\n\r\n").
+-define(not_found_404, "HTTP/1.1 404 Not Found\r\n\r\n").
+-define(ok_200, "HTTP/1.1 200 OK\r\n\r\n").
 
 %query record
 -record(qry,{
@@ -48,7 +54,7 @@ listen(Listen) ->
 handler(Socket) ->
   case gen_tcp:recv(Socket,0) of
     {ok, Data} ->
-      io:format("sock: ~p~n",[Socket]),
+      io:format("data: ~p~n",[Data]),
       case Data of
         {http_request, 'GET', Query, _} ->
           {abs_path, Req} = Query,
@@ -163,7 +169,17 @@ process_params([Param|Params],M) ->
 process_message(M, Socket) ->
   case M#message.type of 
     findname ->
-      ok;
+      Name = findname(M#message.name),
+      case Name of
+        {ok, Data} ->
+          [N|Rest] = Data,
+          [IP|_] = Rest,
+          io:format("Name: ~p~nIP: ~p~n",[N,IP]);
+        notfound ->
+         % send request to every known host
+         error
+      end;
+      
     sendname ->
       ok;
     sendnames ->
@@ -172,14 +188,14 @@ process_message(M, Socket) ->
           List = binary_to_list(Binary),
           Len = length(List),
           gen_tcp:send(Socket,
-          "HTTP/1.1 200 OK\n" ++ 
-          "Content-length: " ++ integer_to_list(Len) ++ "\n" ++
-          "Content-type: text/plain" ++ 
-          "\r\n\r\n" ++ Binary);
+          "HTTP/1.1 200 OK\r\n" ++ 
+          "Content-length: " ++ integer_to_list(Len) ++ "\r\n" ++
+          "Content-type: text/plain" ++ "\r\n\r\n" ++ Binary);
         _ ->
           error
       end;
     sendmessage ->
+      gen_tcp:send(Socket, ?ok_200),
       io:format("~p> ~p~n",[M#message.myname, M#message.message]);
     undefined ->
       error
@@ -222,4 +238,19 @@ write_json_file(Filename, Data) ->
     {error, Why} ->
       io:write("Error: ~p~n", [Why])
   end.
+  
+findname(Name) ->
+  Json = parse_json_file("names.json"),
+  findname(Name,Json).
+  
+findname(_Name,[]) ->
+  notfound;
 
+findname(Name,[J|Json]) ->
+  case J of
+    [Name|_IP] ->
+      {ok, J};
+    _ ->
+      findname(Name,Json)
+  end.
+  
