@@ -279,8 +279,6 @@ findname(Name,[J|Json]) ->
   end.
   
 send_message(M) ->
-  Msn = is_atom(M#message.type),
-  io:format("mess: ~p~p~n",[Msn,M#message.type]),
   case M#message.type of
     sendmessage ->
       io:format("sending mess...~n"),
