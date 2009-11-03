@@ -172,8 +172,10 @@ process_message(M, Socket) ->
           List = binary_to_list(Binary),
           Len = length(List),
           gen_tcp:send(Socket,
-          "HTTP/1.1 200 OK\n" ++ "Content-length: " ++ integer_to_list(Len) ++ 
-          "\nContent-type: text/plain" ++ "\r\n\r\n" ++ Binary);
+          "HTTP/1.1 200 OK\n" ++ 
+          "Content-length: " ++ integer_to_list(Len) ++ "\n" ++
+          "Content-type: text/plain" ++ 
+          "\r\n\r\n" ++ Binary);
         _ ->
           error
       end;
