@@ -92,8 +92,8 @@ parse_params(Query) ->
     "/chat/sendname" ->
       Command = sendname;
       
-    "/chat/asknames" -> 
-      Command = asknames;
+    "/chat/sendnames" -> 
+      Command = sendnames;
     
     "/chat/sendmessage" ->
       Command = sendmessage;
@@ -166,6 +166,17 @@ process_message(M, Socket) ->
       ok;
     sendname ->
       ok;
+    sendnames ->
+      case file:read_file("names.json") of
+        {ok, Binary} ->
+          List = binary_to_list(Binary),
+          Len = length(List),
+          gen_tcp:send(Socket,
+          "HTTP/1.1 200 OK\n" ++ "Content-length: " ++ integer_to_list(Len) ++ 
+          "\nContent-type: text/plain" ++ "\r\n\r\n" ++ Binary);
+        _ ->
+          error
+      end;
     sendmessage ->
       io:format("~p> ~p~n",[M#message.myname, M#message.message]);
     undefined ->
@@ -199,6 +210,7 @@ parse_json_file(Filename) ->
     {error, Why} ->
       io:format("Error opening file: ~p~n", [Why])
   end.
+
   
 write_json_file(Filename, Data) ->
   case file:open(Filename, write) of
