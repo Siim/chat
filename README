@@ -2,6 +2,8 @@ TODO:
   - GUI
   - Check if name is available 
   - Url functions: urlencode, urldecode
+  
+  - Better data records (received message, composed message)
 
   - Request handling
       Handle sendmessage

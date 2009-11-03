@@ -5,6 +5,7 @@
 -export([parse_json_file/1]).
 -export([write_json_file/2]).
 -export([findname/1]).
+-export([send_message/1]).
 %-export([parse_json/1]).
 
 -define(not_implemented_501, "HTTP/1.1 501 Not Implemented\r\n\r\n").
@@ -23,9 +24,11 @@
   type, % e.g. sendmessage, findname ...
   name,
   myname,
+  myip,
   message,
   ip,   %peer's ip
-  ttl
+  ttl,
+  port = 7000
 }).
 
 init(Port) ->
@@ -196,7 +199,28 @@ process_message(M, Socket) ->
       end;
     sendmessage ->
       gen_tcp:send(Socket, ?ok_200),
-      io:format("~p> ~p~n",[M#message.myname, M#message.message]);
+      io:format("~p> ~p~n",[M#message.myname, M#message.message]),
+      case io:fread("Relplay (Y/N)>","~s") of
+        {ok, Answer} ->
+          io:format("Answer: ~p~n",Answer),
+          case Answer of
+            ["Y"|_] ->
+              %replay ... 
+              {ok, Text} = io:fread("Enter message> ", "~s"),
+              {ok, {Address, Port}} = inet:sockname(Socket),
+              Sockip = inet_parse:ntoa(Address),
+              Myaddress = Sockip ++ ":" ++ integer_to_list(Port),
+              Mymess = #message{myip=Myaddress,type=sendmessage, myname="xxx",message=Text,ip=M#message.ip},
+              send_message(Mymess);
+            _ ->
+              io:format("Whaa?")
+           end;
+        {error, Why} ->
+          io:format("Err: ~p~n",[Why]);
+        eof ->
+          io:format("EOF!")
+      end;
+          
     undefined ->
       error
   end.
@@ -254,3 +278,21 @@ findname(Name,[J|Json]) ->
       findname(Name,Json)
   end.
   
+send_message(M) ->
+  Msn = is_atom(M#message.type),
+  io:format("mess: ~p~p~n",[Msn,M#message.type]),
+  case M#message.type of
+    sendmessage ->
+      io:format("sending mess...~n"),
+      inets:start(),
+      io:format("peer ip: ~p~n",[M#message.ip]),
+      io:format("my ip: ~p~n",[M#message.myip]),
+      Addr = "http://" ++ M#message.ip ++ "/chat/sendmessage?message=" ++ M#message.message ++ "&ip=" ++ M#message.myip ++ "&myname=" ++ M#message.myname,
+      %io:format("Addr~p~n",Addr),
+      http:request(get, {Addr,[{"connection", "close"}]},[],[]),
+      ok;
+    _ ->
+      io:format("boooo!!!~n")
+    
+  end.
+    
