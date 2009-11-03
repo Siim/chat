@@ -4,7 +4,7 @@
 -export([process_params/1]).
 -export([parse_json_file/1]).
 -export([write_json_file/2]).
--export([findname/1]).
+-export([find_name/1]).
 -export([send_message/1]).
 %-export([parse_json/1]).
 
@@ -21,7 +21,7 @@
 
 % message structure
 -record(message, {
-  type, % e.g. sendmessage, findname ...
+  type, % e.g. sendmessage, find_name ...
   name,
   myname,
   myip,
@@ -95,8 +95,8 @@ parse_params(Query) ->
   [Type|Qarr] = split(Query,$?),
   
   case Type of
-    "/chat/findname" ->
-      Command = findname;
+    "/chat/find_name" ->
+      Command = find_name;
       
     "/chat/sendname" ->
       Command = sendname;
@@ -171,8 +171,8 @@ process_params([Param|Params],M) ->
   
 process_message(M, Socket) ->
   case M#message.type of 
-    findname ->
-      Name = findname(M#message.name),
+    find_name ->
+      Name = find_name(M#message.name),
       case Name of
         {ok, Data} ->
           [N|Rest] = Data,
@@ -263,19 +263,19 @@ write_json_file(Filename, Data) ->
       io:write("Error: ~p~n", [Why])
   end.
   
-findname(Name) ->
+find_name(Name) ->
   Json = parse_json_file("names.json"),
-  findname(Name,Json).
+  find_name(Name,Json).
   
-findname(_Name,[]) ->
+find_name(_Name,[]) ->
   notfound;
 
-findname(Name,[J|Json]) ->
+find_name(Name,[J|Json]) ->
   case J of
     [Name|_IP] ->
       {ok, J};
     _ ->
-      findname(Name,Json)
+      find_name(Name,Json)
   end.
   
 send_message(M) ->
