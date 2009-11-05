@@ -21,13 +21,6 @@
   params
 }).
 
-%initiated chat
--record(chat,{
-  username,
-  ip,
-  lastmessage
-}).
-
 % message structure
 -record(message, {
   type, % e.g. sendmessage, find_name ...
@@ -197,7 +190,9 @@ process_message(M, Socket) ->
     sendmessage ->
       gen_tcp:send(Socket, ?ok_200),
       io:format("~p> ~p~n",[M#message.myname, M#message.message]),
-      case add_chat(chatproc, M) of
+      Chat = {M#message.myname, M#message.ip, M#message.message},
+
+      case add_chat(chatproc, Chat) of
         ok ->
           ?DEBUG("CHAT ADDED"),
           Chats = get_chat_list(chatproc),
@@ -282,13 +277,26 @@ chats(Res) ->
   receive
     {addchat, Caller, Chat} ->
        Caller ! ok,
-       chats([Chat|Res]);
-    {getchat, Caller, Index} ->
+       {Nam,_,_} = Chat,
+       Compare = fun (A,B) -> if A==B -> true; true-> false end end,
+       % check if name exist in initiated chats
+       Result = [Find || {Find,_,_} <- Res, Compare(Nam,Find)],
+       case Result of
+         [] ->
+           chats([Chat|Res]);
+         _ ->
+           ?DEBUG("Updating chat data..."),
+           % now replace existing chat... 
+           % N - name, I - IP, M - message
+           NewRes = [{N, I, M} || {N, I, M} <- Res, not Compare(Nam, N)],
+           chats([Chat|NewRes])
+       end;
+    {getchat, Caller, _Index} ->
       [H|_T] = Res,
       Caller ! {ok, H},
       chats(Res);
 
-    {deletechat, Caller, Index} ->
+    {deletechat, Caller, _Index} ->
       Caller ! ok,
       chats(Res);
     {getlist, Caller} ->
