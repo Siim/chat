@@ -1,6 +1,7 @@
 -module(chat).
 -export([init/1]).
 -export([split/2]).
+-export([stop_server/0]).
 -export([process_params/1]).
 -export([parse_json_file/1]).
 -export([write_json_file/2]).
@@ -20,6 +21,13 @@
   params
 }).
 
+%initiated chat
+-record(chat,{
+  username,
+  ip,
+  lastmessage
+}).
+
 % message structure
 -record(message, {
   type, % e.g. sendmessage, find_name ...
@@ -35,25 +43,22 @@
 init(Port) ->
   case gen_tcp:listen(Port, [binary, {packet,http}, {reuseaddr,true},{active,false}]) of
     {ok, Listen} ->
+      ChatPid = chats(),
+      register(chatproc, ChatPid),
       Pid = spawn_link(fun() -> listen(Listen) end),
       register(server, Pid),
-      server ! start,
       ok;
     {error, _} ->
       io:format("Some error...")
   end.   
 
 listen(Listen) ->
-  receive
-    stop ->
-      gen_tcp:close(Listen),
-      exit(stopped);
+  {ok, Socket} = gen_tcp:accept(Listen),
+  spawn(fun() -> handler(Socket) end),
+  listen(Listen).
 
-    start ->
-      {ok, Socket} = gen_tcp:accept(Listen),
-      spawn(fun() -> handler(Socket) end),
-      listen(Listen)
-  end.
+stop_server() ->
+  exit(server).
 
 % We need only GET requests...
 handler(Socket) ->
@@ -70,9 +75,7 @@ handler(Socket) ->
 
           % proccess message
           process_message(M, Socket)
-      end,
-           
-      gen_tcp:close(Socket);
+      end;
     {error, closed} ->
       closed
   end.
@@ -194,30 +197,18 @@ process_message(M, Socket) ->
     sendmessage ->
       gen_tcp:send(Socket, ?ok_200),
       io:format("~p> ~p~n",[M#message.myname, M#message.message]),
-      case io:fread("Relplay (Y/N)> ","~s") of
-        {ok, Answer} ->
-          io:format("Answer: ~p~n",Answer),
-          case Answer of
-            ["Y"|_] ->
-              %replay ... 
-              {ok, Text} = io:fread("Enter message> ", "~s"),
-              {ok, {Address, Port}} = inet:sockname(Socket),
-              Sockip = inet_parse:ntoa(Address),
-              Myaddress = Sockip ++ ":" ++ integer_to_list(Port),
-              Mymess = #message{myip=Myaddress,type=sendmessage, myname="xxx",message=Text,ip=M#message.ip},
-              send_message(Mymess);
-            _ ->
-              io:format("Whaa?\n")
-           end;
-        {error, Why} ->
-          ?DEBUG([Why]);
-        eof ->
-          io:format("EOF!")
+      case add_chat(chatproc, M) of
+        ok ->
+          ?DEBUG("CHAT ADDED"),
+          Chats = get_chat_list(chatproc),
+          io:format("Chats: ~p~n", [Chats]);
+        _ ->
+          ?DEBUG("ERROR ADDING CHAT")
       end;
-          
     undefined ->
       error
-  end.
+  end,
+  gen_tcp:close(Socket).
   
 parse_json_file(Filename) ->
   Environ = [],
@@ -275,16 +266,56 @@ find_name(Name,[J|Json]) ->
 send_message(M) ->
   case M#message.type of
     sendmessage ->
-      io:format("sending mess...~n"),
-      inets:start(),
-      io:format("peer ip: ~p~n",[M#message.ip]),
-      io:format("my ip: ~p~n",[M#message.myip]),
-      Addr = "http://" ++ M#message.ip ++ "/chat/sendmessage?message=" ++ M#message.message ++ "&ip=" ++ M#message.myip ++ "&myname=" ++ M#message.myname,
-      %io:format("Addr~p~n",Addr),
-      http:request(get, {Addr,[{"connection", "close"}]},[],[]),
+      %http:request(get, {Addr,[{"connection", "close"}]},[],[]),
       ok;
     _ ->
       io:format("boooo!!!~n")
     
   end.
-    
+
+% add initiated chats, so it is easrier to replay
+% return such datastruct that we can direcly send_message
+chats() ->
+  spawn_link(fun() -> chats([]) end).
+
+chats(Res) ->   
+  receive
+    {addchat, Caller, Chat} ->
+       Caller ! ok,
+       chats([Chat|Res]);
+    {getchat, Caller, Index} ->
+      [H|_T] = Res,
+      Caller ! {ok, H},
+      chats(Res);
+
+    {deletechat, Caller, Index} ->
+      Caller ! ok,
+      chats(Res);
+    {getlist, Caller} ->
+      Caller ! {ok, Res},
+      chats(Res);
+    {_, Caller} ->
+      Caller ! undefined,
+      chats(Res)
+  end.
+
+add_chat(Pid, Chat) ->
+  Pid ! {addchat, self(), Chat},
+  receive
+    ok ->
+      ok;
+    undefined ->
+      error
+  end.
+
+get_chat_list(Pid) ->
+  Pid ! {getlist, self()},
+  receive
+    {ok, Chat} ->
+      Chat;
+    _ ->
+      chat
+  after 
+    2000 ->
+      timeout
+  end.
