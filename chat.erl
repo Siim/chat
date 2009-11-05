@@ -12,6 +12,7 @@
 -define(forbidden_403, "HTTP/1.1 403 Forbidden\r\n\r\n").
 -define(not_found_404, "HTTP/1.1 404 Not Found\r\n\r\n").
 -define(ok_200, "HTTP/1.1 200 OK\r\n\r\n").
+-define(DEBUG(Value), io:format("*** debug : ~p~n", [Value])).
 
 %query record
 -record(qry,{
@@ -34,37 +35,39 @@
 init(Port) ->
   case gen_tcp:listen(Port, [binary, {packet,http}, {reuseaddr,true},{active,false}]) of
     {ok, Listen} ->
-      spawn(fun() -> listen(Listen) end);
-    {error, Reason} ->
-      {stop, Reason}
-  end.
-    
+      Pid = spawn_link(fun() -> listen(Listen) end),
+      register(server, Pid),
+      server ! start,
+      ok;
+    {error, _} ->
+      io:format("Some error...")
+  end.   
 
 listen(Listen) ->
-
-  {ok, Socket} = gen_tcp:accept(Listen),
-  Pid = spawn(fun() -> handler(Socket) end),
-  register(http_server, Pid),
-  listen(Listen),
-  
   receive
-    kill -> 
+    stop ->
       gen_tcp:close(Listen),
-      exit(error, "Killed")
+      exit(stopped);
+
+    start ->
+      {ok, Socket} = gen_tcp:accept(Listen),
+      spawn(fun() -> handler(Socket) end),
+      listen(Listen)
   end.
 
 % We need only GET requests...
 handler(Socket) ->
+  ?DEBUG("HANDLER"),
   case gen_tcp:recv(Socket,0) of
     {ok, Data} ->
-      io:format("data: ~p~n",[Data]),
       case Data of
         {http_request, 'GET', Query, _} ->
           {abs_path, Req} = Query,
           Params = parse_params(Req),
-          
+
           % put message to nice data structure
           M = process_params(Params),
+
           % proccess message
           process_message(M, Socket)
       end,
@@ -124,13 +127,7 @@ gen_params_struct([],Res)->
 gen_params_struct([H|T], Res) ->
   Keyval = split(H,$=),
   case Keyval of 
-    [Key|Rest] ->
-      case Rest of
-        [] ->
-          Val = "";
-        _ ->
-          [Val|_] = Rest
-      end,
+    [Key,Val|_Rest] ->
       gen_params_struct(T, [{list_to_atom(Key),Val} | Res]);
     _ ->
       Res
@@ -140,7 +137,7 @@ process_params([]) ->
   #message{type=undefined};
 
 process_params(Params) ->
-  io:format("params: ~p~n",[Params]),
+  ?DEBUG([Params]),
   Type = Params#qry.type,
   M = #message{type = Type},
   process_params(Params#qry.params, M).
@@ -172,9 +169,9 @@ process_message(M, Socket) ->
       Name = find_name(M#message.name),
       case Name of
         {ok, Data} ->
-          [N|Rest] = Data,
-          [IP|_] = Rest,
-          io:format("Name: ~p~nIP: ~p~n",[N,IP]);
+          [N,IP|_Rest] = Data,
+          ?DEBUG(N),
+          ?DEBUG(IP);
         notfound ->
          % send request to every known host
          error
@@ -197,7 +194,7 @@ process_message(M, Socket) ->
     sendmessage ->
       gen_tcp:send(Socket, ?ok_200),
       io:format("~p> ~p~n",[M#message.myname, M#message.message]),
-      case io:fread("Relplay (Y/N)>","~s") of
+      case io:fread("Relplay (Y/N)> ","~s") of
         {ok, Answer} ->
           io:format("Answer: ~p~n",Answer),
           case Answer of
@@ -210,10 +207,10 @@ process_message(M, Socket) ->
               Mymess = #message{myip=Myaddress,type=sendmessage, myname="xxx",message=Text,ip=M#message.ip},
               send_message(Mymess);
             _ ->
-              io:format("Whaa?")
+              io:format("Whaa?\n")
            end;
         {error, Why} ->
-          io:format("Err: ~p~n",[Why]);
+          ?DEBUG([Why]);
         eof ->
           io:format("EOF!")
       end;
