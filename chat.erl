@@ -7,6 +7,7 @@
 -export([write_json_file/2]).
 -export([find_name/1]).
 -export([send_message/1]).
+-export([findchat/1]).
 %-export([parse_json/1]).
 
 -define(not_implemented_501, "HTTP/1.1 501 Not Implemented\r\n\r\n").
@@ -273,14 +274,14 @@ send_message(M) ->
 chats() ->
   spawn_link(fun() -> chats([]) end).
 
+% todo: addchat and getchat can use same function?? 
 chats(Res) ->   
   receive
     {addchat, Caller, Chat} ->
        Caller ! ok,
        {Nam,_,_} = Chat,
-       Compare = fun (A,B) -> if A==B -> true; true-> false end end,
        % check if name exist in initiated chats
-       Result = [Find || {Find,_,_} <- Res, Compare(Nam,Find)],
+       Result = [Find || {Find,_,_} <- Res, compare(Nam,Find)],
        case Result of
          [] ->
            chats([Chat|Res]);
@@ -288,12 +289,13 @@ chats(Res) ->
            ?DEBUG("Updating chat data..."),
            % now replace existing chat... 
            % N - name, I - IP, M - message
-           NewRes = [{N, I, M} || {N, I, M} <- Res, not Compare(Nam, N)],
+           NewRes = [{N, I, M} || {N, I, M} <- Res, not compare(Nam, N)],
            chats([Chat|NewRes])
        end;
-    {getchat, Caller, _Index} ->
-      [H|_T] = Res,
-      Caller ! {ok, H},
+    {getchat, Caller, Name} ->
+      Chat = findchat(Name),
+      % case chat of later...
+      Caller ! {ok, Chat},
       chats(Res);
 
     {deletechat, Caller, _Index} ->
@@ -305,6 +307,18 @@ chats(Res) ->
     {_, Caller} ->
       Caller ! undefined,
       chats(Res)
+  end.
+
+findchat(Name) ->
+  chatproc ! {getlist, self()},
+  receive
+    {ok, Chats} ->
+      [{N, I, M} || {N,I,M} <- Chats, compare(Name,N)]
+  end.
+compare(A,B) ->
+  if 
+    A==B -> true; 
+    true-> false
   end.
 
 add_chat(Pid, Chat) ->
