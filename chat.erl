@@ -281,6 +281,7 @@ chats(Res) ->
        Caller ! ok,
        {Nam,_,_} = Chat,
        % check if name exist in initiated chats
+       
        Result = [Find || {Find,_,_} <- Res, compare(Nam,Find)],
        case Result of
          [] ->
